@@ -1,17 +1,17 @@
-/* Part of LogicMOO Base logicmoo_util_bb_env
+/* Part of LogicMOO Base bb_env
 % Provides a prolog database *env*
 % ===================================================================
-% File 'logicmoo_util_clause_expansion.pl'
+% File 'clause_expansion.pl'
 % Purpose: An Implementation in SWI-Prolog of certain debugging tools
 % Maintainer: Douglas Miles
 % Contact: $Author: dmiles $@users.sourceforge.net ;
-% Version: 'logicmoo_util_clause_expansion.pl' 1.0.0
+% Version: 'clause_expansion.pl' 1.0.0
 % Revision: $Revision: 1.1 $
 % Revised At:  $Date: 2016/07/11 21:57:28 $
 % Licience: LGPL
 % ===================================================================
 */
-% File: /opt/PrologMUD/pack/logicmoo_base/prolog/logicmoo/util/logicmoo_util_clause_expansion.pl
+% File: /opt/PrologMUD/pack/logicmoo_base/prolog/logicmoo/util/clause_expansion.pl
 :- module(subclause_expansion,
           [
 
@@ -20,10 +20,7 @@
           show_module_imports/0,
           show_module_imports/1,
           show_module_imports/2,
-          push_modules/0,
-          reset_modules/0,
-          current_smt/2,
-          pop_modules/0,
+          
           maybe_add_import_module/3,
           maybe_add_import_module/2,
           maybe_delete_import_module/2,
@@ -33,11 +30,9 @@
           all_source_file_predicates_are_transparent/1,
           without_lm_expanders/1,
 
-          nb_current_or_nil/2,
+          
           get_named_value_goal/2,
           is_fbe/3,
-          is_user_module/0,
-          
           lmce_system_term_expansion/5,
           lmce_system_goal_expansion/5,
           expand_whatnot/6,
@@ -64,6 +59,8 @@ appear in the source-code.
 :- if( \+ current_predicate(system:each_call_cleanup/3)).
 :- use_module(system:library(each_call_cleanup)).
 :- endif.
+
+:- set_module(class(library)).
 
 :- multifile((system:clause_expansion/2,
               system:directive_expansion/2,
@@ -104,12 +101,12 @@ appear in the source-code.
               system:sub_call_expansion/2)).
 
 
-:- module_transparent((is_user_module/0,without_lm_expanders/1,lmce_system_term_expansion/5,lmce_system_goal_expansion/5,functor_non_colon/3)).
+:- module_transparent((virtualize_module/0,without_lm_expanders/1,lmce_system_term_expansion/5,lmce_system_goal_expansion/5,functor_non_colon/3)).
 
-:- ensure_loaded(logicmoo_util_file_scope).
-:- ensure_loaded(logicmoo_util_shared_dynamic).
-:- ensure_loaded(logicmoo_util_dmsg).
-:- ensure_loaded(logicmoo_util_rtrace).
+:- ensure_loaded(file_scope).
+:- ensure_loaded(shared_dynamic).
+:- ensure_loaded(dmsg).
+:- ensure_loaded(rtrace).
 
 :- multifile(system:goal_expansion/4).
 :- dynamic(system:goal_expansion/4).
@@ -117,12 +114,6 @@ appear in the source-code.
 :- dynamic(system:term_expansion/4).
 
 :- meta_predicate get_named_value_goal(0,*).
-
-is_user_module :- prolog_load_context(source,F), baseKB:mpred_is_impl_file(F),!,fail.
-is_user_module :- prolog_load_context(module,M), module_property(M,class(L)),L=library,!,fail.
-is_user_module :- prolog_load_context(module,user). 
-is_user_module.
-
 
 maybe_add_import_module(A,B):-maybe_add_import_module(A,B,start).
 
@@ -261,31 +252,10 @@ call_whatnot_expansion(Mod,MMTE,[M-Preds|TList], Clause0, Pos0, Clause, Pos) :-
 
 
 
-:- system:multifile(baseKB:source_typein_modules/3),
-   system:dynamic(baseKB:source_typein_modules/3).
 
 :- multifile(baseKB:mpred_is_impl_file/1).
 :- dynamic(baseKB:mpred_is_impl_file/1).
 
-
-current_smt(SM,M):-
- '$current_source_module'(SM),'$current_typein_module'(M).
-
-push_modules:- current_smt(SM,M),
-  prolog_load_context(source,F),
-  system:asserta(baseKB:source_typein_modules(SM,M,F)).
-
-reset_modules:- !.
-reset_modules:- 
-  ignore((prolog_load_context(source,F),
-  once(baseKB:source_typein_modules(SM,M,F)),
-  '$set_source_module'(SM),'$set_typein_module'(M))),!.
-
-pop_modules:- !.
-pop_modules:- 
-  ignore((prolog_load_context(source,F),
-  once(system:retract(baseKB:source_typein_modules(SM,M,F))),
-  '$set_source_module'(SM),'$set_typein_module'(M))),!.
 
 
 %TODO
@@ -304,7 +274,6 @@ maybe_delete_import_module(To,From):-  ignore(catch(system:delete_import_module(
 :- export(glean_prolog_impl_file/4).
 :- module_transparent(glean_prolog_impl_file/4).
 
-swi_module(M,Preds):- forall(member(P,Preds),M:export(P)). % ,dmsg(swi_module(M)).
 
 
 get_pos_at(C,Num):-compound(C),arg(1,C,Num),number(Num).
@@ -357,8 +326,7 @@ all_source_file_predicates_are_transparent(File):-
 :- meta_predicate without_lm_expanders(0).
 
 without_lm_expanders(Goal):- current_prolog_flag(lm_expanders,false),!,call(Goal).
-without_lm_expanders(Goal):-
-  each_call_cleanup(set_prolog_flag(lm_expanders,false),Goal,set_prolog_flag(lm_expanders,true)).
+without_lm_expanders(Goal):- locally(set_prolog_flag(lm_expanders,false),Goal).
 
 
 :- module_transparent(user:term_expansion/1).
@@ -392,4 +360,4 @@ system:term_expansion(I,P,O,P2):- current_prolog_flag(lm_special_expanders,true)
 :- initialization(nb_setval( '$term_e',[]),restore).
 
 :- all_source_file_predicates_are_transparent.
-:- push_modules.
+
