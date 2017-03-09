@@ -1,7 +1,7 @@
 name(subclause_expansion).
 title('More detailed versions of term/goal expansion hooks').
 
-version('0.0.8').
+version('1.1.111').
 download('https://github.com/TeamSPoon/subclause_expansion/releases/*.zip').
 
 author( 'Douglas R. Miles', 'logicmoo@gmail.com' ).
