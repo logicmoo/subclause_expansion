@@ -97,10 +97,14 @@ erase_preds(Where):-
               system:directive_expansion/2,
               system:file_body_expansion/3)).
 
-:- multifile((clause_expansion/2,
-              directive_expansion/2,
-              file_body_expansion/3)).
-
+/*
+:- multifile((user:clause_expansion/2,
+              user:directive_expansion/2,
+              user:file_body_expansion/3)).
+:- dynamic((  user:clause_expansion/2,
+              user:directive_expansion/2,
+              user:file_body_expansion/3)).
+*/
 
 :- meta_predicate without_subclause_expansion(0).
 
@@ -113,45 +117,51 @@ without_subclause_expansion(Goal):- locally(set_prolog_flag(subclause_expansion,
 :- dynamic(system:term_expansion/4).
 
 
+:- nb_setval( '$term_user',[]).
+:- initialization(nb_setval( '$term_user',[]),restore).
 :- initialization(nb_setval( '$term_position',[]),restore).
 :- initialization(nb_setval( '$term',[]),restore).
-:- initialization(nb_setval( '$term_e',[]),restore).
 
-
-% subclause_term_expansion(When,In,Pos,Out) :- var(Pos),!, When:nonfile_term_expansion(In,Out).
 
 subclause_term_expansion(_,_,_,_):- current_prolog_flag(subclause_expansion,false),!,false.
-subclause_term_expansion(user,In,_,_):- nb_setval('$term_e',In),fail.
-subclause_term_expansion(When,In,Pos,Out):- nonvar(Pos),nonvar(In),
+subclause_term_expansion(From,In,Pos,Out):- nonvar(Pos),nonvar(In),
   nb_current('$term',FileTerm),
-  file_expansion(When,FileTerm,In,FileTermOut),!, In\=@=FileTermOut,
+  file_expansion(From,FileTerm,In,FileTermOut),!, In\=@=FileTermOut,
   \+ current_prolog_flag(xref,true),
   Out=FileTermOut,
   b_setval('$term',FileTermOut).
 
-file_expansion(When,Term,(:- DirIn),(:- DirOut)):-
-   (Term == (:- DirIn)) -> When:directive_expansion(DirIn,DirOut),!.
+file_expansion(From,Term,(:- DirIn),(:- DirOut)):-
+   (Term == (:- DirIn)) -> 
+   call_expansion_from(From,directive_expansion,DirIn, DirOut),!.
 
-file_expansion(When,Term,In,Out):- 
-   Term == In ->          When:clause_expansion(In,Out),!.
+file_expansion(From,Term,In,Out):- 
+   Term == In ->  call_expansion_from(From,clause_expansion,In,Out),!.
 
-file_expansion(When,Term,(Head:-In),(Head:-Out)):-
-   Term == (Head:-In) ->  When:file_body_expansion(Head,In,Out),!.
+file_expansion(From,Term,(Head:-In),(Head:-Out)):-
+   Term == (Head:-In) ->  call_expansion_from(From,file_body_expansion(Head),In,Out),!.
 
+call_expansion_from(From, Type, In, Out):-
+   functor(Type,F,A),APlus2 is A + 2,
+  '$def_modules'(From:[F/APlus2], MList),
+   call_expansions(MList,Type,[], In,  Out).
 
-system:term_expansion(In,Pos,Out,Pos):- subclause_term_expansion(system,In,Pos,Out).
+call_expansions([],_,_, InOut, InOut).
+call_expansions([M-_|T], Type,Completed, In, Out) :- 
+  ((\+ memberchk(M,Completed), call(M:Type, In, Mid)) -> true ; In = Mid),
+ call_expansions(T, Type,[M|Completed], Mid, Out).
+ 
 
+system:term_expansion(In,Pos,Out,PosOut):- prolog_load_context(module,M),subclause_term_expansion(M,In,Pos,Out),PosOut=Pos.
+user:term_expansion(In,Pos,_,_):- nonvar(Pos), nb_setval('$term_user',In),fail.
+
+/*
 system:file_body_expansion(Head,I,_):- current_prolog_flag(show_expanders,true),dmsg(system:file_body_expansion(Head:-I)),fail.
 system:clause_expansion(I,_):- current_prolog_flag(show_expanders,true),dmsg(system:clause_expansion(I)),fail.
 system:directive_expansion(I,_):-  current_prolog_flag(show_expanders,true),dmsg(system:directive_expansion(I)),fail.
-
-term_expansion(In,Pos,Out,Pos):- subclause_term_expansion(user,In,Pos,Out).
-
-file_body_expansion(Head,I,_):- current_prolog_flag(show_expanders,true),dmsg(file_body_expansion(Head:-I)),fail.
-clause_expansion(I,_):- current_prolog_flag(show_expanders,true),dmsg(clause_expansion(I)),fail.
-directive_expansion(I,_):-  current_prolog_flag(show_expanders,true),dmsg(directive_expansion(I)),fail.
+:- set_prolog_flag(show_expanders,true).
+*/
 
 :- fixup_exports.
 
-% :- set_prolog_flag(show_expanders,true).
 
