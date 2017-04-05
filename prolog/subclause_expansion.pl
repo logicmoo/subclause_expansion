@@ -33,8 +33,8 @@ appear in the source-code.
 
 
 
-:- dynamic(user:buffer_clauses/5).
-:- volatile(user:buffer_clauses/5).
+:- dynamic(sce:buffer_clauses/5).
+:- volatile(sce:buffer_clauses/5).
 
 mst(G):- catch((G*->true;writeln(failed_mst(G))),_E,writeln(err(G))).
 
@@ -52,9 +52,9 @@ save_pred_to(Where,Each):-
 
 save_pred_to_Act(Where,M,P):-
   forall(clause(M:P,_,Ref), 
-    (user:buffer_clauses(Where,M,_,_,Ref)-> true;
+    (sce:buffer_clauses(Where,M,_,_,Ref)-> true;
      ( ((clause(H,B,Ref), (clause_property(Ref,module(_))->true;throw( clause(H,B,Ref))),
-    ignore(((clause_property(Ref,module(M)),assert(user:buffer_clauses(Where,M,H,B,Ref)),true)))))))).
+    ignore(((clause_property(Ref,module(M)),assert(sce:buffer_clauses(Where,M,H,B,Ref)),true)))))))).
 
 erase_except(Where,Each):-
   call_pred_to(erase_except_Act(Where),Each).
@@ -63,18 +63,18 @@ erase_except_Act(Where,M,P):-
     forall(clause(M:P,_,Ref), 
     ((clause(HH,BB,Ref), 
      (clause_property(Ref,module(_))->true;throw( clause(HH,BB,Ref))),
-     ignore(((clause_property(Ref,module(M)),\+ (user:buffer_clauses(Where,M,HH,BB,Ref)),
+     ignore(((clause_property(Ref,module(M)),\+ (sce:buffer_clauses(Where,M,HH,BB,Ref)),
               % writeln(erase(HH,BB,Ref)),
               set_prolog_flag(access_level,system),
               catch(M:erase(Ref),_E,mst(M:retract((HH:-BB)))))))))).
 
 restore_preds(Where):-
- forall(user:buffer_clauses(Where,M,H,B,Ref),
+ forall(sce:buffer_clauses(Where,M,H,B,Ref),
     (M:clause(H,B,Ref)->true; M:assert(H,B))).
  
 
 erase_preds(Where):-
- forall(user:buffer_clauses(Where,M,H,B,Ref),
+ forall(sce:buffer_clauses(Where,M,H,B,Ref),
     (M:clause(H,B,Ref)->erase(Ref);true)).
  
 
@@ -82,7 +82,7 @@ erase_preds(Where):-
 :- save_pred_to(load_expansion,[term_expansion/2,term_expansion/4,goal_expansion/2,goal_expansion/4]).
 
 
-% :- listing(user:buffer_clauses/5).
+% :- listing(sce:buffer_clauses/5).
 
 :- if( \+ current_predicate(system:each_call_cleanup/3)).
 :- use_module(system:library(each_call_cleanup)).
