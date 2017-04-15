@@ -71,7 +71,7 @@ process_this_stream(S):- peek_string(S,2,W),W=" %",!,read_line_to_string(S,_).
 process_this_stream(S):- peek_string(S,1,W),W="%",!,till_eol(S).
 process_this_stream(S):- peek_code(S,W),char_type(W,white),\+ char_type(W,end_of_line),get_code(S,W),put(W),!.
 process_this_stream(S):- must((read_term(S,T,[variable_names(Vs)]),put_variable_names( Vs))),
-  call(b_setval,'$variable_names',Vs),
+  call(b_setval,'$variable_names',Vs), b_setval('$term',T), 
   must((format('~N~n',[]),flush_output,portray_one_line(T),format('~N~n',[]))),!,flush_output,
   prolog_load_context(term_position,Pos),must(visit_script_term(Pos,T,Vs)),!,
   format('~N',[]),!.
@@ -84,7 +84,8 @@ process_this_stream(S):- must((read_term(S,T,[variable_names(Vs)]),put_variable_
 visit_script_term(Pos,   T,      Vs):- fail,dmsg(visit_script_term(Pos,T,Vs)),fail.
 visit_script_term( _,   '?-'(G),_Vs):- !, expand_goal(G,GG) -> in_space_cmt(forall(GG,portray_one_line(G))).
 visit_script_term(Pos,  ':-'(G),_Vs):- !, expand_goal(G,Pos,GG,_)->in_space_cmt(GG).
-visit_script_term(Pos,       T ,_Vs):- b_setval('$term',T), expand_term(T,Pos,Term,_),
+visit_script_term(_Pos,       end_of_file ,_Vs):- !,prolog_load_context(stream,S),consume_stream(S).
+visit_script_term(Pos,       T ,_Vs):- expand_term(T,Pos,Term,_),
    '$set_source_module'(SM, SM),
    strip_module(SM:Term, M, _Plain),
     (   M == SM
