@@ -127,6 +127,6 @@ visit_script_term( T):- prolog_load_context(term_position,Pos), expand_term(T,Po
     '$store_clause'('$source_location'(File, Line):Clause, File).
 
 
-% :- fixup_exports.
+:- fixup_exports.
 
 
