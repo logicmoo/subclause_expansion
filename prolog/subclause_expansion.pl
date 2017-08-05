@@ -32,6 +32,8 @@ appear in the source-code.
 */
 
 
+:- create_prolog_flag(subclause_expansion,true,[keep(true)]).
+
 
 :- dynamic(sce:buffer_clauses/5).
 :- volatile(sce:buffer_clauses/5).
@@ -108,7 +110,10 @@ erase_preds(Where):-
 
 :- meta_predicate without_subclause_expansion(0).
 
-without_subclause_expansion(Goal):- current_prolog_flag(subclause_expansion,false),!,call(Goal).
+% with_subclause_expansion(Goal):- current_prolog_flag(subclause_expansion,true),!,call(Goal).
+with_subclause_expansion(Goal):- locally(set_prolog_flag(subclause_expansion,true),Goal).
+
+% without_subclause_expansion(Goal):- current_prolog_flag(subclause_expansion,false),!,call(Goal).
 without_subclause_expansion(Goal):- locally(set_prolog_flag(subclause_expansion,false),Goal).
 
 :- multifile(system:goal_expansion/4).
