@@ -60,6 +60,8 @@ process_this_stream(S):-
 % in_space_cmt(Goal):- call_cleanup(prepend_each_line(' % ',Goal),format(user_error,'~N',[])),flush_output.
 in_space_cmt(Goal):- setup_call_cleanup(format(user_error,'~N /*~n',[]),Goal,format(user_error,'~N*/~n',[])),flush_output.
 
+:- thread_local(t_l:each_file_term/1).
+
 :- thread_local(t_l:block_comment/0).
 :- thread_local(t_l:skip_echo/0).
 
@@ -72,12 +74,15 @@ till_eol(S):- read_line_to_string(S,String),
 %
 process_stream(S):- at_end_of_stream(S),!,flush_output.
 process_stream(S):- peek_code(S,W),char_type(W,end_of_line),!,get_code(S,W),(t_l:skip_echo -> true ;put(user_error,W)).
-process_stream(S):- t_l:block_comment,peek_string(S,2,W),W="*/",retractall(t_l:block_comment),retractall(t_l:skip_echo),!,till_eol(S).
-process_stream(S):- t_l:block_comment,!,till_eol(S).
+process_stream(S):- t_l:block_comment,peek_string(S,2,W),!,
+   ((W=="*/")->((retractall(t_l:block_comment),retractall(t_l:skip_echo)));true),!,till_eol(S).
+
 process_stream(S):- peek_string(S,2,W),W=" /*",asserta(t_l:block_comment),!,asserta(t_l:skip_echo),!,till_eol(S).
 process_stream(S):- peek_string(S,2,W),W=" %",!,read_line_to_string(S,_).
 process_stream(S):- peek_string(S,2,W),W="/*",asserta(t_l:block_comment),!,till_eol(S).
+process_stream(S):- peek_string(S,2,W),W="#!",!,till_eol(S).
 process_stream(S):- peek_string(S,1,W),W="%",!,till_eol(S).
+
 process_stream(S):- peek_code(S,W),char_type(W,white),\+ char_type(W,end_of_line),get_code(S,W),put(user_error,W),!.
 process_stream(S):- must((read_term(S,T,[variable_names(Vs)]),put_variable_names( Vs))),
   call(b_setval,'$variable_names',Vs), b_setval('$term',T), 
@@ -85,7 +90,8 @@ process_stream(S):- must((read_term(S,T,[variable_names(Vs)]),put_variable_names
   must(visit_script_term(T)),!,
   format(user_error,'~N',[]),!.
 
-process_script_file(File):- open(File,read,Stream),process_this_stream(Stream),!.
+process_script_file(File):- process_script_file(File,visit_script_term).
+process_script_file(File,Process):- open(File,read,Stream),locally(t_l:each_file_term(Process),process_this_stream(Stream)),!.
 
 expand_script_directive(include(G),Pos,process_script_file(G),Pos).
 expand_script_directive(In,Pos,Out,PosOut):- expand_goal(In,Pos,Out,PosOut).
@@ -101,9 +107,12 @@ set_if_level(N):- must(current_prolog_flag(if_level,Level)),NewLevel is Level + 
 :- thread_local(t_l:on_elseif/1).
 :- thread_local(t_l:on_endif/1).
 visit_if(_):- current_prolog_flag(ignoring_input,true),!,set_if_level(+ 1).
-visit_if(G):- call(G),!,set_if_level(+1), t_l:on_elseif(set_prolog_flag(ignoring_input,true)),t_l:on_endif(set_prolog_flag(ignoring_input,false)).
+visit_if(G):- call(G),!,set_if_level(+1), 
+    asserta(t_l:on_elseif(set_prolog_flag(ignoring_input,true))),
+    asserta(t_l:on_endif(set_prolog_flag(ignoring_input,false))).
 visit_if(_):- set_if_level(+1), set_prolog_flag(ignoring_input,true),
-    t_l:on_elseif(set_prolog_flag(ignoring_input,false)),t_l:on_endif(set_prolog_flag(ignoring_input,false)).
+    asserta(t_l:on_elseif(set_prolog_flag(ignoring_input,false))),
+    asserta(t_l:on_endif(set_prolog_flag(ignoring_input,false))).
 
 do_directive(else):- if_level(0)-> (sanity(retract(t_l:on_elseif(G))),call(G)) ; true.
 do_directive(endif):- set_if_level(-1), if_level(0)-> (sanity(retract(t_l:on_endif(G))),call(G)) ; true.
@@ -113,14 +122,19 @@ do_directive(endif):- set_if_level(-1), if_level(0)-> (sanity(retract(t_l:on_end
 %
 % Process A Script Term.
 %
-visit_script_term( _,   '?-'(G)):- !, expand_goal(G,GG) -> in_space_cmt(forall(GG,portray_one_line(G))).
-visit_script_term(:- if(G)):- visit_if(G).
-visit_script_term(:- else):- do_directive(else).
-visit_script_term(:- endif):- do_directive(endif).
+visit_script_term(:- if(G)):- !, (visit_if(G)->true;(trace,visit_if(G))).
+visit_script_term(:- else):- !, must(do_directive(else)).
+visit_script_term(:- endif):- !, must(do_directive(endif)).
 visit_script_term( _Term ):- current_prolog_flag(ignoring_input,true),!.
-visit_script_term(:- G):- prolog_load_context(term_position,Pos), !, expand_script_directive(G,Pos,GG,_)->in_space_cmt(GG).
 visit_script_term( end_of_file ):- !,prolog_load_context(stream,S),consume_stream(S).
-visit_script_term( T):- prolog_load_context(term_position,Pos), expand_term(T,Pos,Term,_),
+
+visit_script_term('?-'(G)):- !, expand_goal(G,GG) -> in_space_cmt(forall(GG,portray_one_line(G))).
+visit_script_term(:- G):- !, prolog_load_context(term_position,Pos), !, expand_script_directive(G,Pos,GG,_)->in_space_cmt(GG).
+
+visit_script_term(T):- t_l:each_file_term(Whatnot),Whatnot\==visit_script_term,call(Whatnot,T),!.
+visit_script_term(T):- compile_script_term(T).
+
+compile_script_term(T):- prolog_load_context(term_position,Pos), expand_term(T,Pos,Term,_),
    '$set_source_module'(SM, SM),
    strip_module(SM:Term, M, _Plain),
     (   M == SM
@@ -132,5 +146,4 @@ visit_script_term( T):- prolog_load_context(term_position,Pos), expand_term(T,Po
 
 
 :- fixup_exports.
-
 
