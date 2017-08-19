@@ -74,21 +74,22 @@ till_eol(S):- read_line_to_string(S,String),
 %
 process_stream(S):- at_end_of_stream(S),!,flush_output.
 process_stream(S):- peek_code(S,W),char_type(W,end_of_line),!,get_code(S,W),(t_l:skip_echo -> true ;put(user_error,W)).
-process_stream(S):- t_l:block_comment,peek_string(S,2,W),!,
-   ((W=="*/")->((retractall(t_l:block_comment),retractall(t_l:skip_echo)));true),!,till_eol(S).
-
-process_stream(S):- peek_string(S,2,W),W=" /*",asserta(t_l:block_comment),!,asserta(t_l:skip_echo),!,till_eol(S).
-process_stream(S):- peek_string(S,2,W),W=" %",!,read_line_to_string(S,_).
-process_stream(S):- peek_string(S,2,W),W="/*",asserta(t_l:block_comment),!,till_eol(S).
-process_stream(S):- peek_string(S,2,W),W="#!",!,till_eol(S).
-process_stream(S):- peek_string(S,1,W),W="%",!,till_eol(S).
-
+process_stream(S):- (peek_string(S,2,W);peek_string(S,1,W);peek_string(S,3,W)),process_stream_peeked213(S,W),!.
 process_stream(S):- peek_code(S,W),char_type(W,white),\+ char_type(W,end_of_line),get_code(S,W),put(user_error,W),!.
+
 process_stream(S):- must((read_term(S,T,[variable_names(Vs)]),put_variable_names( Vs))),
   call(b_setval,'$variable_names',Vs), b_setval('$term',T), 
   must((format(user_error,'~N~n',[]),with_output_to(user_error,portray_clause_w_vars(T)),format(user_error,'~N~n',[]))),!,flush_output(user_error),
   must(visit_script_term(T)),!,
   format(user_error,'~N',[]),!.
+
+process_stream_peeked213(S,W):- t_l:block_comment, 
+  ((W=="*/")->((retractall(t_l:block_comment),retractall(t_l:skip_echo)));true),!,till_eol(S).
+process_stream_peeked213(S," /*"):- asserta(t_l:block_comment),!,asserta(t_l:skip_echo),!,till_eol(S).
+process_stream_peeked213(S," %"):- !, read_line_to_string(S,_).
+process_stream_peeked213(S,"/*"):- !, asserta(t_l:block_comment),!,till_eol(S).
+process_stream_peeked213(S,"#!"):- !, till_eol(S).
+process_stream_peeked213(S,"%"):- !,till_eol(S).
 
 process_script_file(File):- process_script_file(File,visit_script_term).
 process_script_file(File,Process):- open(File,read,Stream),locally(t_l:each_file_term(Process),process_this_stream(Stream)),!.
