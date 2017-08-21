@@ -37,12 +37,13 @@
 :- module_transparent(visit_script_term/1).
 :- module_transparent(in_space_cmt/1).
 
-consume_stream(In) :-
+consume_stream(In,Out) :-
         repeat,
             (   at_end_of_stream(In)
             ->  !
-            ;   read_pending_codes(In, _Chars, []),
-                fail
+            ;   (read_pending_codes(In, Chars, []),
+                format(Out,'~s',[Chars]),
+                fail)
             ).
 
 %% process_this_script is det.
@@ -79,7 +80,8 @@ process_stream(S):- peek_code(S,W),char_type(W,white),\+ char_type(W,end_of_line
 
 process_stream(S):- must((read_term(S,T,[variable_names(Vs)]),put_variable_names( Vs))),
   call(b_setval,'$variable_names',Vs), b_setval('$term',T), 
-  must((format(user_error,'~N~n',[]),with_output_to(user_error,portray_clause_w_vars(T)),format(user_error,'~N~n',[]))),!,flush_output(user_error),
+  write_stream_item(user_error,T),!,
+  flush_output(user_error),
   must(visit_script_term(T)),!,
   format(user_error,'~N',[]),!.
 
@@ -90,6 +92,13 @@ process_stream_peeked213(S," %"):- !, read_line_to_string(S,_).
 process_stream_peeked213(S,"/*"):- !, asserta(t_l:block_comment),!,till_eol(S).
 process_stream_peeked213(S,"#!"):- !, till_eol(S).
 process_stream_peeked213(S,"%"):- !,till_eol(S).
+
+
+write_stream_item(Out,T):-
+  format(Out,'~N~n',[]),
+  with_output_to(Out,portray_clause_w_vars(T)),
+  format(Out,'~N~n',[]),!,flush_output(Out).
+
 
 process_script_file(File):- process_script_file(File,visit_script_term).
 process_script_file(File,Process):- open(File,read,Stream),locally(t_l:each_file_term(Process),process_this_stream(Stream)),!.
@@ -126,11 +135,12 @@ do_directive(endif):- set_if_level(-1), if_level(0)-> (sanity(retract(t_l:on_end
 visit_script_term(:- if(G)):- !, (visit_if(G)->true;(trace,visit_if(G))).
 visit_script_term(:- else):- !, must(do_directive(else)).
 visit_script_term(:- endif):- !, must(do_directive(endif)).
-visit_script_term( _Term ):- current_prolog_flag(ignoring_input,true),!.
-visit_script_term( end_of_file ):- !,prolog_load_context(stream,S),consume_stream(S).
+visit_script_term( end_of_file ):- !,prolog_load_context(stream,S),consume_stream(S,user_error).
+visit_script_term( _Term ):- current_prolog_flag(ignoring_input,true).
 
 visit_script_term('?-'(G)):- !, expand_goal(G,GG) -> in_space_cmt(forall(GG,portray_one_line(G))).
-visit_script_term(:- G):- !, prolog_load_context(term_position,Pos), !, expand_script_directive(G,Pos,GG,_)->in_space_cmt(GG).
+visit_script_term(:- G):- !, prolog_load_context(term_position,Pos), !, expand_script_directive(G,Pos,GG,_),!,
+   (in_space_cmt(GG)*-> true ; print_message(warning,failed(GG))).
 
 visit_script_term(T):- t_l:each_file_term(Whatnot),Whatnot\==visit_script_term,call(Whatnot,T),!.
 visit_script_term(T):- compile_script_term(T).
