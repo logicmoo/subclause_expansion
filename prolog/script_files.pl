@@ -256,7 +256,7 @@ doing(Pred1,T):-
   term_to_clause(T,G),
    each_doing(Pred1,G).
 
-each_doing(Pred1,G):- is_list(G),!,maplist(now_compile_dynamic(Pred1),G).
+each_doing(Pred1,G):- is_list(G),!,maplist(now_doing(Pred1),G).
 each_doing(Pred1,G):-now_doing(Pred1,G).
 
 now_doing(Pred1,MG):- nonvar(MG),strip_module(MG,M,G), M:directive_doing(Pred1,MG,M,G),!.
