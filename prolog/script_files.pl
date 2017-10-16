@@ -182,7 +182,7 @@ write_stream_item(Out,T):-
 
 
 process_script_file(File):- process_script_file(File,visit_script_term).
-process_script_file(File,Process):- open(File,read,Stream),locally(t_l:each_file_term(Process),process_this_stream(Stream)),!.
+process_script_file(File,Process):- open(File,read,Stream),locally_tl(each_file_term(Process),process_this_stream(Stream)),!.
 
 expand_script_directive(include(G),Pos,process_script_file(G),Pos).
 expand_script_directive(In,Pos,Out,PosOut):- expand_goal(In,Pos,Out,PosOut).
