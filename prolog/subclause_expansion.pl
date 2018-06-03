@@ -128,36 +128,50 @@ without_subclause_expansion(Goal):- locally(set_prolog_flag(subclause_expansion,
 :- initialization(nb_setval( '$term',[]),restore).
 
 
-subclause_term_expansion(_,_,_,_):- current_prolog_flag(subclause_expansion,false),!,false.
-subclause_term_expansion(From,In,Pos,Out):- nonvar(Pos),nonvar(In),
-  nb_current('$term',FileTerm),
-  file_expansion(From,FileTerm,In,FileTermOut),!, In\=@=FileTermOut,
-  \+ current_prolog_flag(xref,true),
-  Out=FileTermOut,
-  b_setval('$term',FileTermOut).
-
-file_expansion(From,Term,(:- DirIn),(:- DirOut)):-
-   (Term == (:- DirIn)) -> 
-   call_expansion_from(From,directive_expansion,DirIn, DirOut),!.
-
-file_expansion(From,Term,In,Out):- 
-   Term == In ->  call_expansion_from(From,clause_expansion,In,Out),!.
-
-file_expansion(From,Term,(Head:-In),(Head:-Out)):-
-   Term == (Head:-In) ->  call_expansion_from(From,file_body_expansion(Head),In,Out),!.
-
 call_expansion_from(From, Type, In, Out):-
    functor(Type,F,A),APlus2 is A + 2,
   '$def_modules'(From:[F/APlus2], MList),
    call_expansions(MList,Type,[], In,  Out).
 
+:- module_transparent(call_expansion_from/4).
+
 call_expansions([],_,_, InOut, InOut).
 call_expansions([M-_|T], Type,Completed, In, Out) :- 
-  ((\+ memberchk(M,Completed), call(M:Type, In, Mid)) -> true ; In = Mid),
+  ((\+ memberchk(M,Completed), M:call(M:Type, In, Mid)) -> true ; In = Mid),
  call_expansions(T, Type,[M|Completed], Mid, Out).
- 
 
-system:term_expansion(In,Pos,Out,PosOut):- prolog_load_context(module,M),subclause_term_expansion(M,In,Pos,Out),PosOut=Pos.
+:- module_transparent(call_expansions/5).
+
+% directive_expansion
+file_expansion(From,Term,(:- DirIn),(:- DirOut)):-
+   (Term == (:- DirIn)) -> 
+   call_expansion_from(From,directive_expansion,DirIn, DirOut),!.
+
+% clause_expansion
+file_expansion(From,Term,In,Out):- 
+   Term == In ->  call_expansion_from(From,clause_expansion,In,Out),!.
+
+% file_body_expansion
+file_expansion(From,Term,(Head:-In),(Head:-Out)):-
+   Term == (Head:-In) ->  call_expansion_from(From,file_body_expansion(Head),In,Out),!.
+
+:- module_transparent(file_expansion/4).
+
+
+subclause_term_expansion(In,Pos,Out):-   
+  notrace(\+ current_prolog_flag(subclause_expansion,false)),
+  \+ current_prolog_flag(xref,true),
+  nonvar(Pos),nonvar(In),
+  nb_current('$term',FileTerm),
+  prolog_load_context(module,From),
+  file_expansion(From,FileTerm,In,FileTermOut),!, In\=@=FileTermOut,
+  %\+ current_prolog_flag(xref,true),
+  Out=FileTermOut,
+  b_setval('$term',FileTermOut).
+
+
+system:term_expansion(In,Pos,Out,PosOut):- In\==end_of_file, 
+   subclause_term_expansion(In,Pos,Out)->PosOut=Pos.
 user:term_expansion(In,Pos,_,_):- nonvar(Pos), nb_setval('$term_user',In),fail.
 
 /*
